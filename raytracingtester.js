@@ -42,12 +42,6 @@ raycaster.firstHitOnly = true;
 const sphere = new THREE.SphereGeometry( 0.25, 20, 20 );
 
 
-//
-let width, height, size, box;
-let projection, geoGenerator;
-let geojson;
-let svfMeshValues;
-
 
 
 const params = {
@@ -168,7 +162,7 @@ function init() {
 	folderModel.add( params, 'scaleModel01' ).name( 'Scale model /10' );	
 	// lil-gui Calculation
 	const folderComputation = gui.addFolder( '🧮 Calculation' );
-	folderComputation.add( params, 'raysnum', 10, 20000, 1).name( 'Number of rays' ).onChange( () => updateFromOptions() );
+	folderComputation.add( params, 'raysnum', 10, 1000000, 1).name( 'Number of rays' ).onChange( () => updateFromOptions() );
 	// lil-gui Options
 	const folderPoi = gui.addFolder( '🔴 Point Of Interset' );
 	folderPoi.add( params, 'poisize', 0.1, 10, 0.01).name( 'POI size' ).onChange( () => {
@@ -217,9 +211,8 @@ function init() {
 		}
 	});
 	// lil-gui Export
-	const folderExport = gui.addFolder( '📤 Export' );
-	folderExport.add( params, 'saveSvg').name( 'Save projection as .SVG' );
-	folderExport.add( params, "saveIm").name( 'Save 3D view as .PNG' );
+	// const folderExport = gui.addFolder( '📤 Export' );
+	// folderExport.add( params, "saveIm").name( 'Save 3D view as .PNG' );
 	// lil-gui About
 	const folderAbout = gui.addFolder( '🔗 About' );
     // folderAbout.add( params, 'article').name( 'Beckers partition' );
@@ -244,7 +237,6 @@ function init() {
 	
 	// resize eventlistener
 	window.addEventListener( 'resize', function () {
-		resizeHemi();
 		
 		camera.aspect = window.innerWidth / window.innerHeight;
 		camera.updateProjectionMatrix();
@@ -259,7 +251,6 @@ function init() {
 
 function updateFromOptions() {
 
-	svfMeshValues = new Array(params.raysnum).fill(0);
 
 	rayCasterObjects.forEach( f => f.remove() );
 	rayCasterObjects.splice(0, rayCasterObjects.length);
@@ -288,9 +279,14 @@ function updateFromOptions() {
 	// origin
 	let poiorigin = poi.position;
 
-	for (let r = 0; r<directions.length; r++) {
-		addRaycasterNew(poiorigin,directions[r],r);
-	}
+	// ray tracing
+	// doRaycasting(poiorigin, directions);
+
+	doRaycastingWithWorkers(poiorigin, directions);
+
+	// for (let r = 0; r<directions.length; r++) {
+	// 	addRaycasterNew(poiorigin,directions[r],r);
+	// }
 
 	if ( ! geometry ) {
 		return;
@@ -592,8 +588,6 @@ function addRaycasterNew(origin,direction,id) {
 			// console.log(res);
 			// console.log(dirVec);
 			if (res.length > 0) {
-				// change svfmeshvalues value
-				svfMeshValues[id] = 1.0;
 
 				// hitPoint
 				hitMesh.position.set(res[0].point.x, res[0].point.y, res[0].point.z);
@@ -620,4 +614,174 @@ function addRaycasterNew(origin,direction,id) {
 
 }
 
+function doRaycasting(origin, directions) {
+	
+	// RAY TRACING
 
+	let startTimeRayTracing = performance.now();
+
+	// for direction in directions
+	let impactPositions = [];
+	for (let direction of directions) {
+
+		const dirVec = new THREE.Vector3();
+		dirVec.x = direction[0];
+		dirVec.y = direction[1];
+		dirVec.z = direction[2];
+		dirVec.normalize();
+
+		// perform raycasting from origin to direction
+		raycaster.set( origin, dirVec );
+		const res = raycaster.intersectObject( containerObj, true );
+		if (res.length > 0) {
+			impactPositions.push(res[0].point);
+		}
+	}
+
+	let endTimeRayTracing = performance.now();
+	let timeRayTracing = endTimeRayTracing - startTimeRayTracing;
+	console.log("timeRayTracing: " + timeRayTracing);
+
+
+	showImpactPoints(impactPositions);
+
+}
+
+function doRaycastingWithWorkers(origin, directions) {
+
+	let numOfWorkers = 4;
+
+	// RAY TRACING
+	
+	let startTimeRayTracing = performance.now();
+
+	// Convert the scene to JSON
+	let sceneJson = JSON.stringify(scene.toJSON());
+
+	// divide directions by numOfWorkers
+	let directionsNumForOneWorker = Math.floor(directions.length / numOfWorkers);
+
+	// console.log(navigator.hardwareConcurrency);
+	
+	// Workers
+	// for (let i = 0; i < numOfWorkers; i++) {
+	// 	let directionsByWorker = directions.slice(i*directionsNumForOneWorker, (i+1)*directionsNumForOneWorker);
+	// 	// Create a worker
+	// 	let worker = new Worker('raytracingWorker.js', { type: "module" });
+	// 	// Send the scene to the worker
+	// 	worker.postMessage({
+	// 		sceneJson: sceneJson,
+	// 		directions: directionsByWorker,
+	// 		origin: origin
+	// 	});
+	// 	// console.log(sceneJson);
+	// 	// Listen for messages from the worker
+	// 	worker.onmessage = function (e) {
+	// 		console.log(e.data);
+	// 	}
+	// 	console.log("worker created", worker);
+	// }
+
+	// Create a worker 
+	var worker = new Worker('raytracingWorkerBundle.js', { type: "module" });
+
+	let impactPositions;
+	// Listen for messages from the worker
+	worker.onmessage = function (e) {
+		impactPositions = e.data.impactPositions;
+		
+		for (let i = 0; i < impactPositions.length; i++) {
+			impactPositions[i] = new THREE.Vector3(impactPositions[i].x, impactPositions[i].y, impactPositions[i].z);
+		}
+		
+		// SHOW
+		showImpactPoints(impactPositions);
+
+		//Time
+		let endTimeRayTracing = performance.now();
+		let timeRayTracing = endTimeRayTracing - startTimeRayTracing;
+		console.log("timeRayTracing: " + timeRayTracing);
+	
+	}
+	// Send the scene to the worker
+	worker.postMessage({
+		sceneJson: sceneJson,
+		directions: directions,
+		origin: origin
+	});
+
+
+
+	// let endTimeRayTracing = performance.now();
+	// let timeRayTracing = endTimeRayTracing - startTimeRayTracing;
+	// console.log("timeRayTracing: " + timeRayTracing);
+
+
+	
+}
+
+function showImpactPoints(impactPositions) {
+	
+	// SHOW
+	
+	let startTimeShowRays = performance.now();
+	
+	// Create instance 
+	const instanceGeometry = sphere.clone(); // Clone the original geometry
+	const instances = impactPositions.length; // Number of instances
+
+	// Create an InstancedMesh using the instanceGeometry and materialhit
+	const hitInstancedMesh = new THREE.InstancedMesh(instanceGeometry, materialhit, instances);
+
+
+	// for impact in impactPositions
+	for (let i = 0; i < impactPositions.length-1; i++) {
+
+		let impactPosition = impactPositions[i]
+		// // Objects
+		// const objRay = new THREE.Object3D();
+		// // Hit ball
+		// const hitMesh = new THREE.Mesh( sphere, materialhit );
+		// hitMesh.scale.multiplyScalar( 0.75 );
+
+		// fill rayCasterObjects list 
+		rayCasterObjects.push( {
+			update: () => {
+				
+				// // hitPoint
+				// hitMesh.position.set(impactPosition.x, impactPosition.y, impactPosition.z);
+				// objRay.add( hitMesh );
+
+				// // add to scene
+				// scene.add( objRay );
+				
+
+				// Set the position of the instance
+				const matrix = new THREE.Matrix4();
+				matrix.setPosition(impactPosition);
+				hitInstancedMesh.setMatrixAt(i, matrix);
+
+				// Add the instance to the scene
+				scene.add(hitInstancedMesh);
+			
+			},
+
+			remove: () => {
+
+				scene.remove( hitInstancedMesh );
+
+			}
+		});
+
+		rayCasterObjects[rayCasterObjects.length-1].update();
+	
+	}
+
+
+	let endTimeShowRays = performance.now();
+	let timeShowRays = endTimeShowRays - startTimeShowRays;
+	console.log("timeShowRays: " + timeShowRays);
+
+	console.log('scene', scene);
+	render();
+}

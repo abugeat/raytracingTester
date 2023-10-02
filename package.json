@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type":"module",
   "description": "",
-  "main": "bundle.js",
+  "main": "raytracingtesterBundle.js",
   "scripts": {
     "build": "rollup -c",
     "watch": "rollup -c -w"
