@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="raytracingtester.svg" type="image/svg+xml">
-    <!-- <script src="https://unpkg.com/solar-calculator@0.2/dist/solar-calculator.min.js"></script> -->
 </head>
 <body>
     <!-- border -->
@@ -20,6 +19,20 @@
     <div id="loading" style="display: none;">
         <div>Loading...</div>
         <div id="loading-spinner"></div>
+    </div>
+
+    <div id="textInfo" style="display: none;">
+        <b>Raytracing Tester</b><br><br>
+        Compare the performances of different raytracing approaches:<br>
+        - without workers,<br>
+        - with N workers working in parallel.<br><br>
+        Depending on the model, the number of workers, the number of ray traced,<br>
+        and the hardware, the results may vary.<br>
+        While using workers, the three js scene is duplicated N times in each workers.<br>
+        To do so:<br>
+        - first the scene have to be converted to json before being passed to the workers.<br>
+        - then the workers have to convert back the json scene to three js scene.<br><br>
+        Check the console for computation time.<br>
     </div>
 </body>
 </html>

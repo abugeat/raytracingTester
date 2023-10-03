@@ -1,7 +1,7 @@
 // raytracingtester
 
 
-import * as dat from 'three/examples/jsm/libs/lil-gui.module.min.js';
+import GUI from 'lil-gui'; 
 import * as THREE from 'three';
 import {
 	acceleratedRaycast, computeBoundsTree, disposeBoundsTree,
@@ -39,19 +39,32 @@ const materialrays = new THREE.MeshBasicMaterial( { color: 0x39FF14, transparent
 // Create ray casters in the scene
 const raycaster = new THREE.Raycaster();
 raycaster.firstHitOnly = true;
-const sphere = new THREE.SphereGeometry( 0.25, 20, 20 );
+const sphere = new THREE.SphereGeometry( 0.1, 20, 20 );
 
+let workers = [];
 
 
 
 const params = {
-	importModel: () => document.getElementById("inputfile").click(),
+	textInfo: () => {
+		const infoDiv = document.getElementById("textInfo");
+		if (infoDiv.style.display === "none") {
+			infoDiv.style.display = "block";
+		} else {
+			infoDiv.style.display = "none";
+		}
+	},
+	importModel: () => {
+		const input = document.getElementById("inputfile");
+		input.click();
+	},
 	changeModelUp: () => changeModelUp(),
 	invertModelUp: () => invertModelUp(),
 	scaleModel10: () => scaleModel10(),
 	scaleModel01: () => scaleModel01(),
 	latitude: 45.95,
-	raysnum: 2000,
+	raysnum: 100000,
+	numOfWorkers: navigator.hardwareConcurrency/2,
 	transcontrolsvisible: true,
 	poisize: 5.0,
 	impactvisible: true,
@@ -116,7 +129,7 @@ function init() {
 
 
 	//poi setup
-	const materialpoi = new THREE.MeshBasicMaterial( { color: 0xb24531} );
+	const materialpoi = new THREE.MeshBasicMaterial( { color: 0x1e850b} );
 	poi = new THREE.Mesh( sphere, materialpoi );
 	poi.scale.multiplyScalar( 5.0 );
 	poi.position.set(-25, -6, 0);
@@ -146,25 +159,22 @@ function init() {
 	
 	
 	// lil-gui
-	const gui = new dat.GUI();
+	const gui = new GUI();
 	gui.title("raytracingtester");
+	gui.add( params, 'textInfo').name( 'Info' );
 	// lil-gui 3d Model
 	const folderModel = gui.addFolder( '📥 3D Model' );
-	folderModel.add( params, 'importModel' ).name( 'Import your model' ).onChange( () => {
-		
-		const input = document.getElementById("inputfile");
-		input.click();
-	
-	});
+	folderModel.add( params, 'importModel' ).name( 'Import your model' );
 	folderModel.add( params, 'changeModelUp' ).name( 'Change model up' );
 	folderModel.add( params, 'invertModelUp' ).name( 'Invert model up' );
 	folderModel.add( params, 'scaleModel10' ).name( 'Scale model x10' );	
 	folderModel.add( params, 'scaleModel01' ).name( 'Scale model /10' );	
 	// lil-gui Calculation
 	const folderComputation = gui.addFolder( '🧮 Calculation' );
-	folderComputation.add( params, 'raysnum', 10, 1000000, 1).name( 'Number of rays' ).onChange( () => updateFromOptions() );
+	folderComputation.add( params, 'raysnum', 1000, 1000000, 1000).name( 'Number of rays' ).onFinishChange( () => updateFromOptions() );
+	folderComputation.add( params, 'numOfWorkers', 0, navigator.hardwareConcurrency, 1).name( 'Number of workers' ).onFinishChange( () => updateFromOptions() );
 	// lil-gui Options
-	const folderPoi = gui.addFolder( '🔴 Point Of Interset' );
+	const folderPoi = gui.addFolder( '🟢 Point Of Interset' );
 	folderPoi.add( params, 'poisize', 0.1, 10, 0.01).name( 'POI size' ).onChange( () => {
 		poi.scale.multiplyScalar( params.poisize/poi.scale.x );
 		renderer.render( scene, camera );
@@ -191,7 +201,7 @@ function init() {
 		}
 	});
 	// lil-gui Options
-	const folderOptions = gui.addFolder( '🎛 Options' );
+	const folderOptions = gui.addFolder( '⚙️ Options' );
 	folderOptions.add( params, 'impactvisible').name( 'Impact points').onChange( () => {
 		if (params.impactvisible) {
 			materialhit.visible = true;
@@ -201,21 +211,11 @@ function init() {
 			renderer.render( scene, camera );
 		}
 	});
-	folderOptions.add( params, 'impactvisible').name( 'Rays').onChange( () => {
-		if (params.impactvisible) {
-			materialrays.visible = true;
-			renderer.render( scene, camera );
-		} else {
-			materialrays.visible = false;
-			renderer.render( scene, camera );
-		}
-	});
 	// lil-gui Export
 	// const folderExport = gui.addFolder( '📤 Export' );
 	// folderExport.add( params, "saveIm").name( 'Save 3D view as .PNG' );
 	// lil-gui About
 	const folderAbout = gui.addFolder( '🔗 About' );
-    // folderAbout.add( params, 'article').name( 'Beckers partition' );
     folderAbout.add( params, 'source').name( 'Source code' );
     folderAbout.add( params, 'me').name( 'Me' );
 
@@ -272,7 +272,8 @@ function updateFromOptions() {
 	const directions = [];
 	for ( let i = 0; i < params.raysnum; i ++ ) {
 
-		directions.push( [ Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5 ] );
+		// directions.push( [ Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5 ] );
+		directions.push( getRandomDirection() );
 
 	}
 
@@ -280,13 +281,17 @@ function updateFromOptions() {
 	let poiorigin = poi.position;
 
 	// ray tracing
-	// doRaycasting(poiorigin, directions);
-
-	doRaycastingWithWorkers(poiorigin, directions);
-
-	// for (let r = 0; r<directions.length; r++) {
-	// 	addRaycasterNew(poiorigin,directions[r],r);
-	// }
+	// Stop previous workers if they are running
+	for (let i = 0; i < workers.length; i++) {
+		workers[i].terminate();
+	}
+	switch (params.numOfWorkers) {
+		case 0:
+			doRaycasting(poiorigin, directions);
+			break;
+		default:
+			doRaycastingWithWorkers(poiorigin, directions, params.numOfWorkers);
+	}
 
 	if ( ! geometry ) {
 		return;
@@ -559,65 +564,23 @@ function letcomputeBoundsTree() {
 }
 
 
-
-
-function addRaycasterNew(origin,direction,id) {
-
-	// reusable vectors
-	const origVec = origin;
-
-	const dirVec = new THREE.Vector3();
-	dirVec.x = direction[0];
-	dirVec.y = direction[1];
-	dirVec.z = direction[2];
-	dirVec.normalize();
-
-	// Objects
-	const objRay = new THREE.Object3D();
-	// Hit ball
-	const hitMesh = new THREE.Mesh( sphere, materialhit );
-	hitMesh.scale.multiplyScalar( 0.75 );
-
-	// fill rayCasterObjects list 
-	rayCasterObjects.push( {
-		update: () => {
-			raycaster.set( origVec, dirVec );
-			// raycaster.firstHitOnly = true;
-			// console.log(containerObj);
-			const res = raycaster.intersectObject( containerObj, true );
-			// console.log(res);
-			// console.log(dirVec);
-			if (res.length > 0) {
-
-				// hitPoint
-				hitMesh.position.set(res[0].point.x, res[0].point.y, res[0].point.z);
-				objRay.add( hitMesh );
-
-				// rayline
-				const geometryLine = new THREE.BufferGeometry().setFromPoints( [origVec, res[0].point] );
-				const line = new THREE.Line( geometryLine, materialrays );
-				objRay.add( line );
-
-				// add to scene
-				scene.add( objRay );
-			}
-		},
-
-		remove: () => {
-
-			scene.remove( objRay );
-
-		}
-	});
-
-	rayCasterObjects[id].update();
-
+function getRandomDirection() {
+	// Generate random azimuth and altitude angles
+	const azimuth = Math.random() * Math.PI * 2;
+	const altitude = Math.random() * Math.PI;
+  
+	// Convert azimuth and altitude to spherical coordinates
+	const x = Math.sin(altitude) * Math.cos(azimuth);
+	const y = Math.cos(altitude); // y is up in three js
+	const z = Math.sin(altitude) * Math.sin(azimuth);
+  
+	return [x, y, z];
 }
 
 function doRaycasting(origin, directions) {
 	
 	// RAY TRACING
-
+	console.log("%c🚦 Start ray tracing without workers", "font-weight: bold");
 	let startTimeRayTracing = performance.now();
 
 	// for direction in directions
@@ -640,95 +603,117 @@ function doRaycasting(origin, directions) {
 
 	let endTimeRayTracing = performance.now();
 	let timeRayTracing = endTimeRayTracing - startTimeRayTracing;
-	console.log("timeRayTracing: " + timeRayTracing);
+	console.log("%c🏁 Time of ray tracing without workers: " + timeRayTracing, "font-weight: bold");
 
 
 	showImpactPoints(impactPositions);
 
 }
 
-function doRaycastingWithWorkers(origin, directions) {
 
-	let numOfWorkers = 4;
+function doRaycastingWithWorkers(origin, directions, numOfWorkers) {
 
-	// RAY TRACING
 	
-	let startTimeRayTracing = performance.now();
-
-	// Convert the scene to JSON
-	let sceneJson = JSON.stringify(scene.toJSON());
-
-	// divide directions by numOfWorkers
-	let directionsNumForOneWorker = Math.floor(directions.length / numOfWorkers);
-
+	// RAY TRACING
+	console.log("%c🚦 Start ray tracing with " +numOfWorkers+ " workers", "font-weight: bold");
+	const startTimeRayTracing = performance.now();
+	
+	
+	// num of workers
 	// console.log(navigator.hardwareConcurrency);
+	let completedWorkers = 0;
+
+	
+	// Time to jsonify the scene
+	const t0 = performance.now();
+	// Convert the scene to JSON
+	const sceneJson = JSON.stringify(scene.toJSON());
+	const t1 = performance.now();
+	console.log("Time to jsonify the scene: " + (t1 - t0) + " milliseconds.");
+	
+
+
+	
+	// divide directions by numOfWorkers
+	const directionsNumForOneWorker = Math.floor(directions.length / numOfWorkers);
+
 	
 	// Workers
-	// for (let i = 0; i < numOfWorkers; i++) {
-	// 	let directionsByWorker = directions.slice(i*directionsNumForOneWorker, (i+1)*directionsNumForOneWorker);
-	// 	// Create a worker
-	// 	let worker = new Worker('raytracingWorker.js', { type: "module" });
-	// 	// Send the scene to the worker
-	// 	worker.postMessage({
-	// 		sceneJson: sceneJson,
-	// 		directions: directionsByWorker,
-	// 		origin: origin
-	// 	});
-	// 	// console.log(sceneJson);
-	// 	// Listen for messages from the worker
-	// 	worker.onmessage = function (e) {
-	// 		console.log(e.data);
-	// 	}
-	// 	console.log("worker created", worker);
-	// }
-
-	// Create a worker 
-	var worker = new Worker('raytracingWorkerBundle.js', { type: "module" });
-
-	let impactPositions;
-	// Listen for messages from the worker
-	worker.onmessage = function (e) {
-		impactPositions = e.data.impactPositions;
+	let allImpactPositions = [];
+	let allSceneRebuildTimes = [];
+	for (let i = 0; i < numOfWorkers; i++) {
+		const directionsByWorker = directions.slice(i*directionsNumForOneWorker, (i+1)*directionsNumForOneWorker);
 		
-		for (let i = 0; i < impactPositions.length; i++) {
-			impactPositions[i] = new THREE.Vector3(impactPositions[i].x, impactPositions[i].y, impactPositions[i].z);
+		// Create a worker 
+		let worker = new Worker('raytracingWorkerBundle.js', { type: "module" });
+
+		// Listen for messages from the worker
+		worker.onmessage = function (e) {
+			let impactPositions = e.data.impactPositions;
+			let sceneRebuildTime = e.data.sceneRebuildTime;
+				
+			// Store results
+			// allImpactPositions.push(...impactPositions);
+			for (let i = 0; i < impactPositions.length; i++) {
+				allImpactPositions.push(impactPositions[i]);
+			}
+			allSceneRebuildTimes.push(sceneRebuildTime);
+
+			completedWorkers++;
+
+			// SHOW
+			if (completedWorkers === numOfWorkers) {
+				// Time to rebuild the scene in workers
+				const averageSceneRebuildTime = allSceneRebuildTimes.reduce((a, b) => a + b, 0) / allSceneRebuildTimes.length;
+				console.log("Average time to rebuild the scene in workers: " + averageSceneRebuildTime + " milliseconds.");
+				
+				// Time
+				let endTimeRayTracing = performance.now();
+				let timeRayTracing = endTimeRayTracing - startTimeRayTracing;
+				console.log("%c🏁 Time of ray tracing with " +numOfWorkers+ " workers: " + timeRayTracing+ " milliseconds. (Jsonification and scene rebuild in workers included)", "font-weight: bold");
+
+				// All workers have finished, execute your function
+				showImpactPoints(allImpactPositions);
+			}
+
+			worker.terminate();
+		
 		}
-		
-		// SHOW
-		showImpactPoints(impactPositions);
 
-		//Time
-		let endTimeRayTracing = performance.now();
-		let timeRayTracing = endTimeRayTracing - startTimeRayTracing;
-		console.log("timeRayTracing: " + timeRayTracing);
-	
+		// store worker in workers global array
+		workers.push(worker);
+
+		// Send the scene to the worker
+		worker.postMessage({
+			sceneJson: sceneJson,
+			directions: directionsByWorker,
+			origin: origin
+		});
 	}
-	// Send the scene to the worker
-	worker.postMessage({
-		sceneJson: sceneJson,
-		directions: directions,
-		origin: origin
-	});
 
 
 
-	// let endTimeRayTracing = performance.now();
-	// let timeRayTracing = endTimeRayTracing - startTimeRayTracing;
-	// console.log("timeRayTracing: " + timeRayTracing);
-
-
-	
 }
 
 function showImpactPoints(impactPositions) {
 	
+
+
 	// SHOW
 	
 	let startTimeShowRays = performance.now();
 	
+
+	// check impactPositions type
+	if (!(impactPositions[0] instanceof THREE.Vector3)) {
+		for (let i = 0; i < impactPositions.length; i++) {
+			impactPositions[i] = new THREE.Vector3(impactPositions[i].x, impactPositions[i].y, impactPositions[i].z);
+		}
+	}
+
 	// Create instance 
-	const instanceGeometry = sphere.clone(); // Clone the original geometry
-	const instances = impactPositions.length; // Number of instances
+	const instanceGeometry = sphere.clone(); 
+	const instances = impactPositions.length;
 
 	// Create an InstancedMesh using the instanceGeometry and materialhit
 	const hitInstancedMesh = new THREE.InstancedMesh(instanceGeometry, materialhit, instances);
@@ -777,11 +762,10 @@ function showImpactPoints(impactPositions) {
 	
 	}
 
+	render();
 
 	let endTimeShowRays = performance.now();
 	let timeShowRays = endTimeShowRays - startTimeShowRays;
-	console.log("timeShowRays: " + timeShowRays);
+	console.log("Time to show impact points: " + timeShowRays);
 
-	console.log('scene', scene);
-	render();
 }

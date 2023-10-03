@@ -1,7 +1,7 @@
 {
   "name": "raytracingtester",
   "version": "1.0.0",
-  "type":"module",
+  "type": "module",
   "description": "",
   "main": "raytracingtesterBundle.js",
   "scripts": {
@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "d3": "^7.6.1",
+    "lil-gui": "^0.18.2",
     "solar-calculator": "^0.2.1",
     "suncalc": "^1.9.0",
     "three-mesh-bvh": "^0.5.16",

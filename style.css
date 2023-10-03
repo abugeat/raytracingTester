@@ -42,18 +42,6 @@ body {
     height: 100%;
 }
 
-#content {
-    position: absolute;
-    top:0;
-    left:0;
-    width: 50%;
-    height: 50%;
-    overflow: hidden;
-    pointer-events: none;
-    margin: 1rem;
-    /* z-index:2; */
-    /* background-color: blue; */
-}
 
 #loading {
     color: white;
@@ -88,16 +76,14 @@ body {
     to { -webkit-transform: rotate(360deg); }
 }
 
-#svfoutput {
+#textInfo {
     position: absolute;
-    bottom: 0;
-    right: 0;
+    top: 1rem ;
+    left: 1rem;
     padding: 5px;
+    /* color: red; */
     color: #39FF14;
-    opacity: 0.75;
     font-family: monospace;
-    pointer-events: none;
-    white-space: pre;
 }
 
 .ticks text {

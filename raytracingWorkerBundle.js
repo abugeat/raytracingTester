@@ -50555,6 +50555,9 @@ BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 self.onmessage = function(event) {
     // console.log("event.data", event.data);
 
+	// time to rebuild the scene
+	const t0 = performance.now();
+
     let sceneJson = JSON.parse(event.data.sceneJson);
     let directions = event.data.directions;
     let origin = event.data.origin;
@@ -50572,6 +50575,9 @@ self.onmessage = function(event) {
 	} );
 	scene.children[2].children[0].geometry.boundsTree.splitStrategy = SAH;
 
+	// time to rebuild the scene
+	const t1 = performance.now();
+	const sceneRebuildTime = t1 - t0;
 
     // find all the impact positions
     let impactPositions = [];
@@ -50592,5 +50598,5 @@ self.onmessage = function(event) {
 	}
 
     // Send data back to the main script
-    self.postMessage({ impactPositions: impactPositions});
+    self.postMessage({ impactPositions: impactPositions, sceneRebuildTime: sceneRebuildTime});
 };
