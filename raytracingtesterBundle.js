@@ -32414,11 +32414,6 @@ class PolyhedronGeometry extends BufferGeometry {
 
 }
 
-new Vector3$1();
-new Vector3$1();
-new Vector3$1();
-new Triangle();
-
 /**
  * Extensible curve object.
  *
@@ -47209,43 +47204,6 @@ SeparatingAxisBounds.prototype.setFromBox = ( function () {
 	};
 
 } )();
-
-( (function () {
-
-	const cacheSatBounds = new SeparatingAxisBounds();
-	return function areIntersecting( shape1, shape2 ) {
-
-		const points1 = shape1.points;
-		const satAxes1 = shape1.satAxes;
-		const satBounds1 = shape1.satBounds;
-
-		const points2 = shape2.points;
-		const satAxes2 = shape2.satAxes;
-		const satBounds2 = shape2.satBounds;
-
-		// check axes of the first shape
-		for ( let i = 0; i < 3; i ++ ) {
-
-			const sb = satBounds1[ i ];
-			const sa = satAxes1[ i ];
-			cacheSatBounds.setFromPoints( sa, points2 );
-			if ( sb.isSeparated( cacheSatBounds ) ) return false;
-
-		}
-
-		// check axes of the second shape
-		for ( let i = 0; i < 3; i ++ ) {
-
-			const sb = satBounds2[ i ];
-			const sa = satAxes2[ i ];
-			cacheSatBounds.setFromPoints( sa, points1 );
-			if ( sb.isSeparated( cacheSatBounds ) ) return false;
-
-		}
-
-	};
-
-}) )();
 
 const closestPointLineToLine = ( function () {
 
@@ -114843,6 +114801,7 @@ TransformControlsPlane.prototype.isTransformControlsPlane = true;
 
 
 
+
 Mesh.prototype.raycast = acceleratedRaycast;
 BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -114888,7 +114847,7 @@ const params = {
 	scaleModel10: () => scaleModel10(),
 	scaleModel01: () => scaleModel01(),
 	latitude: 45.95,
-	raysnum: 100000,
+	raysnum: 1000,
 	numOfWorkers: navigator.hardwareConcurrency/2,
 	transcontrolsvisible: true,
 	poisize: 5.0,
@@ -115280,11 +115239,15 @@ function loadModel(url, fileExt) {
 			loader.ifcManager.setWasmPath("wasm/");
 			loader.load(url, (ifcModel) => {
 				
+				console.log(ifcModel);
+
 				// TO avoid Multi-root error when building bvh!
-				ifcModel.geometry.clearGroups(); 
+				// ifcModel.geometry.clearGroups(); 
 
-				mesh = new Mesh(ifcModel.geometry, material);
 
+				// mesh = new THREE.Mesh(ifcModel.geometry, ifcModel.material);
+
+				mesh = ifcModel;
 				// move mesh barycenter to global origin
 				let center = getCenterPoint(mesh);
 				mesh.geometry.translate(-center.x, -center.y, -center.z);

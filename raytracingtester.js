@@ -63,7 +63,7 @@ const params = {
 	scaleModel10: () => scaleModel10(),
 	scaleModel01: () => scaleModel01(),
 	latitude: 45.95,
-	raysnum: 100000,
+	raysnum: 1000,
 	numOfWorkers: navigator.hardwareConcurrency/2,
 	transcontrolsvisible: true,
 	poisize: 5.0,
@@ -455,11 +455,15 @@ function loadModel(url, fileExt) {
 			loader.ifcManager.setWasmPath("wasm/");
 			loader.load(url, (ifcModel) => {
 				
+				console.log(ifcModel);
+
 				// TO avoid Multi-root error when building bvh!
-				ifcModel.geometry.clearGroups(); 
+				// ifcModel.geometry.clearGroups(); 
 
-				mesh = new THREE.Mesh(ifcModel.geometry, material);
 
+				// mesh = new THREE.Mesh(ifcModel.geometry, ifcModel.material);
+
+				mesh = ifcModel;
 				// move mesh barycenter to global origin
 				let center = getCenterPoint(mesh);
 				mesh.geometry.translate(-center.x, -center.y, -center.z);
