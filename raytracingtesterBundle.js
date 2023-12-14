@@ -115087,11 +115087,6 @@ function updateFromOptions() {
 
 	}
 
-	// while ( rayCasterObjects.length < params.raysnum ) {
-
-	// 	addRaycaster();
-
-	// }
 
 	// generate a list of random directions for the rays
 	const directions = [];
@@ -115392,12 +115387,18 @@ function letcomputeBoundsTree() {
 function getRandomDirection() {
 	// Generate random azimuth and altitude angles
 	const azimuth = Math.random() * Math.PI * 2;
-	const altitude = Math.random() * Math.PI;
+	const altitude =  Math.acos( 1 - 2 * Math.random() ); // acos(1 - 2 * Math.random()) for a uniform distribution on the sphere
   
-	// Convert azimuth and altitude to spherical coordinates
-	const x = Math.sin(altitude) * Math.cos(azimuth);
-	const y = Math.cos(altitude); // y is up in three js
-	const z = Math.sin(altitude) * Math.sin(azimuth);
+	  // Precompute trigonometric values
+	  const cosAltitude = Math.cos(altitude);
+	  const sinAltitude = Math.sin(altitude);
+	  const cosAzimuth = Math.cos(azimuth);
+	  const sinAzimuth = Math.sin(azimuth);
+	
+	  // Convert azimuth and altitude to spherical coordinates
+	  const x = sinAltitude * cosAzimuth;
+	  const y = cosAltitude;
+	  const z = sinAltitude * sinAzimuth;
   
 	return [x, y, z];
 }
